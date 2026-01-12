@@ -1,105 +1,109 @@
-from streamlit_autorefresh import st_autorefresh
-# =========================================================
-# ZapPay Mobile – AP Summary Dashboard (Cloud-Deployable)
-# Auto-refresh + Color-Coded Invoices
-# =========================================================
-
 import streamlit as st
+from streamlit_autorefresh import st_autorefresh
 import pandas as pd
-import sqlite3
 from datetime import datetime
-import time
+import random
 
-# ---------------- PAGE CONFIG ----------------
-st.set_page_config(
-    page_title="ZapPay Mobile",
-    page_icon="📱",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-st.markdown("""
-<style>
-.stApp { background-color: #f9fbfd; color: #1f2937; }
-h1, h2, h3 { color: #0d47a1; text-align: center; }
-.metric-box {
-    background: white;
-    padding: 16px;
-    border-radius: 10px;
-    border-left: 6px solid #0d47a1;
-    text-align: center;
-}
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown("## 📱 ZapPay – Mobile AP Dashboard")
-
-# ---------------- AUTO REFRESH ----------------
-# Refresh every 60 seconds
-st_autorefresh = st.experimental_data_editor if hasattr(st, "experimental_data_editor") else st
+# -------------------------
+# Auto-refresh every 60 sec
+# -------------------------
 st_autorefresh(interval=60000, key="refresh")
 
-# ---------------- DATABASE CONNECTION ----------------
-DB_PATH = "zap_pay.db"  # Desktop app writes here
-
-conn = sqlite3.connect(DB_PATH)
-df = pd.read_sql_query("SELECT * FROM incoming_queue", conn)
-conn.close()
-
-if not df.empty:
-    df["Received"] = pd.to_datetime(df["Received"])
-
-# ---------------- SUMMARY CARDS ----------------
-today = datetime.now().date()
-df_today = df[df["Received"].dt.date == today] if not df.empty else pd.DataFrame(columns=df.columns)
-
-awaiting_review = df_today[df_today["Status"]=="Needs Review"]
-flagged = df_today[df_today["Confidence"]<0.85]
-approved = df_today[df_today["Status"]=="Auto Approved"]
-
-clients_needing_review = awaiting_review["Client"].nunique() if not awaiting_review.empty else 0
-
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Clients Needing Review", clients_needing_review)
-col2.metric("Bills Awaiting", len(awaiting_review))
-col3.metric("Flagged Issues", len(flagged))
-col4.metric("Approved", len(approved))
-
-st.markdown("---")
-
-# ---------------- DRILL-DOWN FILTER ----------------
-st.subheader("Invoice Drill-Down")
-
-# Filter by client
-clients = df_today["Client"].unique().tolist() if not df_today.empty else []
-selected_client = st.selectbox("Filter by Client", ["All"] + clients)
-
-# Filter by status
-statuses = ["All", "Auto Approved", "Needs Review"]
-selected_status = st.selectbox("Filter by Status", statuses)
-
-filtered_df = df_today.copy()
-if selected_client != "All":
-    filtered_df = filtered_df[filtered_df["Client"]==selected_client]
-if selected_status != "All":
-    filtered_df = filtered_df[filtered_df["Status"]==selected_status]
-
-# ---------------- COLOR-CODED TABLE ----------------
-def color_code(row):
-    if row["Confidence"] < 0.85:
-        return ["background-color: #ffcccc"]*len(row)  # Red
-    elif row["Status"] == "Needs Review":
-        return ["background-color: #fff2cc"]*len(row)  # Yellow
-    elif row["Status"] == "Auto Approved":
-        return ["background-color: #d9f2d9"]*len(row)  # Green
-    else:
-        return [""]*len(row)
-
-st.dataframe(
-    filtered_df[["Received","Client","Supplier","Amount","Category","Confidence","Status"]]
-        .style.apply(color_code, axis=1),
-    use_container_width=True
+# -------------------------
+# Page config
+# -------------------------
+st.set_page_config(
+    page_title="📱 ZapPay Mobile AP",
+    page_icon="💸",
+    layout="wide"
 )
 
-st.caption("© 2026 ZapPay – Mobile AP Dashboard | Auto-Refresh Every 60s")
+# -------------------------
+# Mock Data (replace with real integration)
+# -------------------------
+# Simulate invoice data
+def generate_mock_invoices():
+    clients = ["Client A", "Client B", "Client C"]
+    statuses = ["awaiting_review", "flagged", "approved"]
+    data = []
+    for i in range(25):
+        client = random.choice(clients)
+        status = random.choices(
+            statuses, weights=[0.4, 0.2, 0.4], k=1
+        )[0]
+        amount = round(random.uniform(100, 2000), 2)
+        data.append({
+            "Invoice ID": f"{i+1:03d}",
+            "Client": client,
+            "Supplier": f"Supplier {random.randint(1,5)}",
+            "Amount": amount,
+            "Status": status,
+            "Received": datetime.now().strftime("%Y-%m-%d %H:%M")
+        })
+    return pd.DataFrame(data)
+
+df = generate_mock_invoices()
+
+# -------------------------
+# Client Grouping
+# -------------------------
+st.title("📱 ZapPay – Mobile AP Dashboard")
+clients = df["Client"].unique()
+
+for client in clients:
+    client_df = df[df["Client"] == client]
+    st.subheader(f"Client: {client}")
+
+    # Status counts
+    awaiting = len(client_df[client_df["Status"]=="awaiting_review"])
+    flagged = len(client_df[client_df["Status"]=="flagged"])
+    approved = len(client_df[client_df["Status"]=="approved"])
+    
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Awaiting Review", awaiting)
+    col2.metric("Flagged", flagged)
+    col3.metric("Approved", approved)
+    col4.metric("Total Bills", len(client_df))
+    
+    # Color-coded table
+    def color_status(row):
+        if row.Status == "awaiting_review":
+            return ["#FFF3CD"]*len(row)
+        elif row.Status == "flagged":
+            return ["#F8D7DA"]*len(row)
+        elif row.Status == "approved":
+            return ["#D4EDDA"]*len(row)
+        else:
+            return ["white"]*len(row)
+    
+    st.dataframe(client_df.style.apply(color_status, axis=1), use_container_width=True)
+
+# -------------------------
+# Quick Actions
+# -------------------------
+st.sidebar.title("⚡ Quick Actions")
+if st.sidebar.button("Auto-approve all high-confidence"):
+    st.sidebar.success("Auto-approve action simulated!")
+if st.sidebar.button("View flagged only"):
+    flagged_df = df[df["Status"]=="flagged"]
+    st.sidebar.dataframe(flagged_df, use_container_width=True)
+
+# -------------------------
+# Summary
+# -------------------------
+st.markdown("---")
+st.subheader("📊 Today's Summary (All Clients)")
+
+today_df = df  # In real app, filter by today
+total_bills = len(today_df)
+total_flagged = len(today_df[today_df["Status"]=="flagged"])
+total_review = len(today_df[today_df["Status"]=="awaiting_review"])
+total_approved = len(today_df[today_df["Status"]=="approved"])
+
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Active Bills", total_bills)
+col2.metric("Awaiting Review", total_review)
+col3.metric("Flagged Issues", total_flagged)
+col4.metric("Approved", total_approved)
+
 
