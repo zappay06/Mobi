@@ -1,3 +1,2 @@
 streamlit>=1.24.0
 pandas>=2.0.0
-sqlite3   # SQLite is included in Python, optional in requirements
