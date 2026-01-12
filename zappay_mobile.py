@@ -21,7 +21,6 @@ st.set_page_config(
 # -------------------------
 # Mock Data (replace with real integration)
 # -------------------------
-# Simulate invoice data
 def generate_mock_invoices():
     clients = ["Client A", "Client B", "Client C"]
     statuses = ["awaiting_review", "flagged", "approved"]
@@ -45,9 +44,21 @@ def generate_mock_invoices():
 df = generate_mock_invoices()
 
 # -------------------------
-# Client Grouping
+# Color mapping for Status
+# -------------------------
+status_emoji = {
+    "awaiting_review": "🟡 Awaiting Review",
+    "flagged": "🔴 Flagged",
+    "approved": "🟢 Approved"
+}
+
+df["Status Display"] = df["Status"].map(status_emoji)
+
+# -------------------------
+# Dashboard
 # -------------------------
 st.title("📱 ZapPay – Mobile AP Dashboard")
+
 clients = df["Client"].unique()
 
 for client in clients:
@@ -65,18 +76,9 @@ for client in clients:
     col3.metric("Approved", approved)
     col4.metric("Total Bills", len(client_df))
     
-    # Color-coded table
-    def color_status(row):
-        if row.Status == "awaiting_review":
-            return ["#FFF3CD"]*len(row)
-        elif row.Status == "flagged":
-            return ["#F8D7DA"]*len(row)
-        elif row.Status == "approved":
-            return ["#D4EDDA"]*len(row)
-        else:
-            return ["white"]*len(row)
-    
-    st.dataframe(client_df.style.apply(color_status, axis=1), use_container_width=True)
+    # Display table with Status Emoji
+    display_cols = ["Invoice ID", "Supplier", "Amount", "Status Display", "Received"]
+    st.dataframe(client_df[display_cols].reset_index(drop=True), use_container_width=True)
 
 # -------------------------
 # Quick Actions
@@ -86,10 +88,10 @@ if st.sidebar.button("Auto-approve all high-confidence"):
     st.sidebar.success("Auto-approve action simulated!")
 if st.sidebar.button("View flagged only"):
     flagged_df = df[df["Status"]=="flagged"]
-    st.sidebar.dataframe(flagged_df, use_container_width=True)
+    st.sidebar.dataframe(flagged_df[["Invoice ID","Client","Supplier","Amount","Status Display","Received"]], use_container_width=True)
 
 # -------------------------
-# Summary
+# Today's Summary
 # -------------------------
 st.markdown("---")
 st.subheader("📊 Today's Summary (All Clients)")
@@ -105,5 +107,6 @@ col1.metric("Active Bills", total_bills)
 col2.metric("Awaiting Review", total_review)
 col3.metric("Flagged Issues", total_flagged)
 col4.metric("Approved", total_approved)
+
 
 
