@@ -1,3 +1,4 @@
+from streamlit_autorefresh import st_autorefresh
 # =========================================================
 # ZapPay Mobile – AP Summary Dashboard (Cloud-Deployable)
 # Auto-refresh + Color-Coded Invoices
@@ -101,3 +102,4 @@ st.dataframe(
 )
 
 st.caption("© 2026 ZapPay – Mobile AP Dashboard | Auto-Refresh Every 60s")
+
