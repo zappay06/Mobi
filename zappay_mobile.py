@@ -1,112 +1,48 @@
 import streamlit as st
-from streamlit_autorefresh import st_autorefresh
+import sqlite3
 import pandas as pd
-from datetime import datetime
-import random
 
-# -------------------------
-# Auto-refresh every 60 sec
-# -------------------------
-st_autorefresh(interval=60000, key="refresh")
-
-# -------------------------
 # Page config
-# -------------------------
-st.set_page_config(
-    page_title="📱 ZapPay Mobile AP",
-    page_icon="💸",
-    layout="wide"
-)
+st.set_page_config(page_title="📱 ZapPay Mobile", layout="wide")
+st.header("📱 ZapPay – Mobile AP Dashboard")
 
-# -------------------------
-# Mock Data (replace with real integration)
-# -------------------------
-def generate_mock_invoices():
-    clients = ["Client A", "Client B", "Client C"]
-    statuses = ["awaiting_review", "flagged", "approved"]
-    data = []
-    for i in range(25):
-        client = random.choice(clients)
-        status = random.choices(
-            statuses, weights=[0.4, 0.2, 0.4], k=1
-        )[0]
-        amount = round(random.uniform(100, 2000), 2)
-        data.append({
-            "Invoice ID": f"{i+1:03d}",
-            "Client": client,
-            "Supplier": f"Supplier {random.randint(1,5)}",
-            "Amount": amount,
-            "Status": status,
-            "Received": datetime.now().strftime("%Y-%m-%d %H:%M")
-        })
-    return pd.DataFrame(data)
+# Connect to main database
+conn = sqlite3.connect("zappay.db", check_same_thread=False)
 
-df = generate_mock_invoices()
+# Fetch real invoices
+invoices_df = pd.read_sql("""
+    SELECT invoices.*, clients.name as client_name
+    FROM invoices
+    LEFT JOIN clients ON invoices.client_id = clients.id
+""", conn)
 
-# -------------------------
-# Color mapping for Status
-# -------------------------
-status_emoji = {
-    "awaiting_review": "🟡 Awaiting Review",
-    "flagged": "🔴 Flagged",
-    "approved": "🟢 Approved"
-}
+# Compute metrics safely
+awaiting = len(invoices_df[invoices_df["status"]=="Needs Review"]) if not invoices_df.empty else 0
+flagged = len(invoices_df[invoices_df["status"]=="Flagged"]) if not invoices_df.empty else 0
+approved = len(invoices_df[invoices_df["status"]=="Auto Approved"]) if not invoices_df.empty else 0
+total = len(invoices_df) if not invoices_df.empty else 0
 
-df["Status Display"] = df["Status"].map(status_emoji)
-
-# -------------------------
-# Dashboard
-# -------------------------
-st.title("📱 ZapPay – Mobile AP Dashboard")
-
-clients = df["Client"].unique()
-
-for client in clients:
-    client_df = df[df["Client"] == client]
-    st.subheader(f"Client: {client}")
-
-    # Status counts
-    awaiting = len(client_df[client_df["Status"]=="awaiting_review"])
-    flagged = len(client_df[client_df["Status"]=="flagged"])
-    approved = len(client_df[client_df["Status"]=="approved"])
-    
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Awaiting Review", awaiting)
-    col2.metric("Flagged", flagged)
-    col3.metric("Approved", approved)
-    col4.metric("Total Bills", len(client_df))
-    
-    # Display table with Status Emoji
-    display_cols = ["Invoice ID", "Supplier", "Amount", "Status Display", "Received"]
-    st.dataframe(client_df[display_cols].reset_index(drop=True), use_container_width=True)
-
-# -------------------------
-# Quick Actions
-# -------------------------
-st.sidebar.title("⚡ Quick Actions")
-if st.sidebar.button("Auto-approve all high-confidence"):
-    st.sidebar.success("Auto-approve action simulated!")
-if st.sidebar.button("View flagged only"):
-    flagged_df = df[df["Status"]=="flagged"]
-    st.sidebar.dataframe(flagged_df[["Invoice ID","Client","Supplier","Amount","Status Display","Received"]], use_container_width=True)
-
-# -------------------------
-# Today's Summary
-# -------------------------
-st.markdown("---")
-st.subheader("📊 Today's Summary (All Clients)")
-
-today_df = df  # In real app, filter by today
-total_bills = len(today_df)
-total_flagged = len(today_df[today_df["Status"]=="flagged"])
-total_review = len(today_df[today_df["Status"]=="awaiting_review"])
-total_approved = len(today_df[today_df["Status"]=="approved"])
-
+# Display summary
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("Active Bills", total_bills)
-col2.metric("Awaiting Review", total_review)
-col3.metric("Flagged Issues", total_flagged)
-col4.metric("Approved", total_approved)
+col1.metric("Awaiting Review", awaiting)
+col2.metric("Flagged", flagged)
+col3.metric("Approved", approved)
+col4.metric("Total Bills", total)
+
+# Show grouped client data if invoices exist
+if not invoices_df.empty:
+    grouped = invoices_df.groupby("client_name").agg(
+        awaiting_review=("status", lambda x: sum(x=="Needs Review")),
+        flagged=("status", lambda x: sum(x=="Flagged")),
+        approved=("status", lambda x: sum(x=="Auto Approved")),
+        total=("id", "count")
+    ).reset_index()
+    st.subheader("Invoices by Client")
+    st.dataframe(grouped, use_container_width=True)
+else:
+    st.info("No invoices yet. Add clients and upload invoices in the main system.")
+
+
 
 
 
