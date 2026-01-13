@@ -23,14 +23,51 @@ h1, h2, h3 { color: #0d47a1; }
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------- DATABASE ----------------
+import sqlite3
+import pandas as pd
+import os
+
+DB_PATH = "zapay.db"
+
+def get_connection():
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    return conn
+
+def init_db():
+    conn = get_connection()
+    c = conn.cursor()
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS clients (
+        client_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT UNIQUE NOT NULL,
+        created_at TEXT DEFAULT (datetime('now','localtime'))
+    )
+    """)
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS invoices (
+        invoice_id TEXT PRIMARY KEY,
+        supplier TEXT,
+        amount REAL,
+        category TEXT,
+        confidence REAL,
+        status TEXT,
+        received TEXT,
+        client_id INTEGER,
+        FOREIGN KEY (client_id) REFERENCES clients(client_id)
+    )
+    """)
+
+    conn.commit()
+    conn.close()
+
 def get_data():
-    conn = sqlite3.connect(DB_FILE)
+    init_db()  # 👈 THIS IS THE KEY FIX
+    conn = get_connection()
     df = pd.read_sql("SELECT * FROM invoices", conn)
     conn.close()
     return df
-
-df = get_data()
 
 # ---------------- DASHBOARD ----------------
 st.markdown("## 📱 ZapPay – Mobile AP Dashboard")
@@ -75,6 +112,7 @@ if selected_client:
     st.dataframe(client_df[["Invoice ID","Supplier","Amount","Category","Confidence","Status","Received"]], use_container_width=True)
 
 st.caption("© 2026 ZapPay Mobile Dashboard")
+
 
 
 
